@@ -1,7 +1,6 @@
 import { scaleIdentity } from 'd3-scale';
 import { select } from 'd3-selection';
 import { dataJoin } from 'd3fc-data-join';
-import { range } from './scale';
 import constant from './constant';
 
 export default () => {
@@ -9,34 +8,36 @@ export default () => {
     let xScale = scaleIdentity();
     let yScale = scaleIdentity();
     let value = d => d;
-    let keyValue = (d, i) => i;
     let label = value;
     let decorate = () => {};
     let orient = 'horizontal';
 
-    const join = dataJoin('g', 'annotation');
+    const join = dataJoin('g', 'annotation-line');
 
     const instance = (selection) => {
 
+        if (orient !== 'horizontal' && orient !== 'vertical') {
+            throw new Error('Invalid orientation');
+        }
+        const horizontal = orient === 'horizontal';
+        const translation = horizontal ? (a, b) => `translate(${a}, ${b})` : (a, b) => `translate(${b}, ${a})`;
+        const lineProperty = horizontal ? 'x2' : 'y2';
+        // the value scale which the annotation 'value' relates to, the crossScale
+        // is the other. Which is which depends on the orienation!
+        const crossScale = horizontal ? xScale : yScale;
+        const valueScale = horizontal ? yScale : xScale;
+        const handleOne = horizontal ? 'left-handle' : 'bottom-handle';
+        const handleTwo = horizontal ? 'right-handle' : 'top-handle';
+        const textOffsetX = horizontal ? '0.5em' : '0em';
+        const textOffsetY = horizontal ? '0.32em' : '1.21em';
+        const textAnchor = horizontal ? 'start' : 'middle';
+
+        const scaleRange = crossScale.range();
+        // the transform that sets the 'origin' of the annotation
+        const containerTransform = (d) => translation(scaleRange[0], valueScale(value(d)));
+        const scaleWidth = scaleRange[1] - scaleRange[0];
+
         selection.each((data, selectionIndex, nodes) => {
-
-            if (orient !== 'horizontal' && orient !== 'vertical') {
-                throw new Error('Invalid orientation');
-            }
-            const horizontal = orient === 'horizontal';
-            const translation = horizontal ? (a, b) => `translate(${a}, ${b})` : (a, b) => `translate(${b}, ${a})`;
-            const lineProperty = horizontal ? 'x2' : 'y2';
-            // the value scale which the annotation 'value' relates to, the crossScale
-            // is the other. Which is which depends on the orienation!
-            const crossScale = horizontal ? xScale : yScale;
-            const valueScale = horizontal ? yScale : xScale;
-            const handleOne = horizontal ? 'left-handle' : 'bottom-handle';
-            const handleTwo = horizontal ? 'right-handle' : 'top-handle';
-
-            const scaleRange = range(crossScale);
-            // the transform that sets the 'origin' of the annotation
-            const containerTransform = (d) => translation(scaleRange[0], valueScale(value(d)));
-            const scaleWidth = scaleRange[1] - scaleRange[0];
 
             const g = join(select(nodes[selectionIndex]), data);
 
@@ -57,8 +58,9 @@ export default () => {
                 .style('stroke', 'none')
                 .attr('transform', translation(scaleWidth, 0))
                 .append('text')
-                .attr('x', -5)
-                .attr('y', -5);
+                .attr('text-anchor', textAnchor)
+                .attr('x', textOffsetX)
+                .attr('dy', textOffsetY);
 
             // Update
             g.classed(orient, true);
@@ -98,21 +100,14 @@ export default () => {
         if (!args.length) {
             return value;
         }
-        value = functor(args[0]);
-        return instance;
-    };
-    instance.keyValue = (...args) => {
-        if (!args.length) {
-            return keyValue;
-        }
-        keyValue = functor(args[0]);
+        value = constant(args[0]);
         return instance;
     };
     instance.label = (...args) => {
         if (!args.length) {
             return label;
         }
-        label = functor(args[0]);
+        label = constant(args[0]);
         return instance;
     };
     instance.decorate = (...args) => {
